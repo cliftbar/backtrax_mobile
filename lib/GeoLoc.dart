@@ -8,11 +8,21 @@ class GeoLoc {
   late LocationSettings locationSettings;
   late Stream<Position> posStream;
   late StreamSubscription<Position> posSub;
+  bool isLocActive = false;
   int logCounter = 0;
   List<Position> locs = [];
   late LocationPermission permission;
   bool trackingEnabled = false;
   BacktrackClient client = BacktrackClient();
+
+  Future<void> checkGps() async {
+    isLocActive = await Geolocator.isLocationServiceEnabled();
+    if (!isLocActive) {
+      LocationSettings quickSettings =
+          LocationSettings(accuracy: LocationAccuracy.low);
+      await Geolocator.getCurrentPosition(locationSettings: quickSettings);
+    }
+  }
 
   Future<bool> hasLocationPermission() async {
     permission = await Geolocator.checkPermission();
@@ -34,7 +44,11 @@ class GeoLoc {
   }
 
   Future<void> init() async {
-    await hasLocationPermission().onError((e, _) {print(e); return false;});
+    await hasLocationPermission().onError((e, _) {
+      print(e);
+      return false;
+    });
+    await checkGps();
     if (defaultTargetPlatform == TargetPlatform.android) {
       locationSettings = AndroidSettings(
           accuracy: LocationAccuracy.high,

@@ -2,6 +2,7 @@ import 'package:baktrax/BacktrackClient.dart';
 import 'package:baktrax/GeoLoc.dart';
 import 'package:disable_battery_optimization/disable_battery_optimization.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   runApp(const MyApp());
@@ -14,7 +15,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Backtrax',
+      title: 'Backtrack',
       theme: ThemeData(
         // This is the theme of your application.
         //
@@ -34,11 +35,12 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
         useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'Backtrax Home Page'),
+      home: const MyHomePage(title: 'Backtrack Logger'),
     );
   }
 }
 
+// https://medium.com/@ozgeekaratas/simple-location-tracking-app-in-flutter-fa8541d01f58
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key, required this.title});
 
@@ -58,8 +60,30 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
+  int _logCounter = 0;
+
+  // Loc loc = Loc();
+  GeoLoc gLoc = GeoLoc();
+  BacktrackClient client = BacktrackClient();
+  bool _permissionsEnabled = false;
+  String _posString = "";
+  String _trackingText = "Start Tracking";
+
+  TextEditingController textEdit = TextEditingController();
+
+  List<String> _trackIds = [];
+
+  final String _backtrackKey = "user";
+
+  String _newTrackId = "track";
+
+  String _backTrackUrl = "";
+
   @override
   void initState() {
+    _backTrackUrl =
+        "https://backtrack.cliftbar.site/map.html?key=$_backtrackKey&track=$_newTrackId";
+    textEdit.text = _newTrackId;
     super.initState();
     gLoc
         .init()
@@ -68,51 +92,35 @@ class _MyHomePageState extends State<MyHomePage> {
         .whenComplete(() => DisableBatteryOptimization
             .showDisableManufacturerBatteryOptimizationSettings(
                 "Your device has additional battery optimization",
-                "Follow the steps and disable the optimizations to allow smooth functioning of this app"));
+                "Follow the steps and disable the optimizations to allow smooth functioning of this app"))
+        .whenComplete(() => setState(() {
+              _permissionsEnabled = gLoc.isLocActive;
+            }));
   }
 
-  int _logCounter = 0;
-
-  // Loc loc = Loc();
-  GeoLoc gLoc = GeoLoc();
-  BacktrackClient client = BacktrackClient();
-  bool _locPerm = false;
-  String _posString = "";
-  String _trackingText = "Start Tracking";
-
-  TextEditingController textEdit = TextEditingController();
-
-  List<String> _trackIds = [];
-
   Future<void> _getTracks() async {
-    var ts = await client.getTrackNames(key: "user");
-    // tracks = ts
-    //     .map((t) => ListTile(
-    //           title: Text(t),
-    //         ))
-    //     .toList();
+    var ts = await client.getTrackNames(key: _backtrackKey);
     setState(() {
       _trackIds = ts;
     });
   }
 
-  void _incrementCounter() {
-    gLoc.logCounter++;
-    setState(() {
-      _logCounter = gLoc.logCounter;
-    });
+  Future<void> _updateBacktrackLink(text) async {
+    _newTrackId = text;
+    _backTrackUrl = client.makeBacktrackShareUrl(_backtrackKey, _newTrackId);
   }
 
-  Future<void> _requestPermissions() async {
-    // await loc.requestLocationPermission();
-
-    var hasPerm = await gLoc.hasLocationPermission();
-    setState(() {
-      _locPerm = hasPerm;
-    });
+  Future<void> _openBacktrackShareUrl() async {
+    var backtrackUri = Uri.parse(_backTrackUrl);
+    await launchUrl(backtrackUri);
   }
 
-  Future<void> toggleTrack() async {
+  Future<void> _openBacktrackMapUrl() async {
+    var backtrackMapUri = Uri.parse(client.makeBacktrackMapUrl(_backtrackKey));
+    await launchUrl(backtrackMapUri);
+  }
+
+  Future<void> toggleTracking() async {
     gLoc.toggleTracking(
         textEdit.text,
         (d) => setState(() {
@@ -132,9 +140,6 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
     // The Flutter framework has been optimized to make rerunning build methods
     // fast, so that you can just rebuild anything that needs updating rather
     // than having to individually change instances of widgets.
@@ -161,7 +166,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 children: [
                   FilledButton(
                     onPressed: _getTracks,
-                    child: const Text("Get Tracks"),
+                    child: const Text("Refresh Tracks"),
                   ),
                   Expanded(
                     child: ListView.builder(
@@ -171,7 +176,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         itemBuilder: (BuildContext ctxt, int index) {
                           return Text(_trackIds[index]);
                         }),
-                  )
+                  ),
                 ],
               ),
             ),
@@ -182,41 +187,39 @@ class _MyHomePageState extends State<MyHomePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.start,
               children: <Widget>[
-                FilledButton(
-                  onPressed: () async {
-                    await _requestPermissions();
-                  },
-                  child: const Text("Permissions"),
+                Text(
+                  'Permissions Ok: $_permissionsEnabled',
                 ),
                 TextField(
                   controller: textEdit,
+                  onChanged: _updateBacktrackLink,
                   decoration: const InputDecoration(
-                    labelText: 'track_id',
+                    labelText: 'New Track Name',
                   ),
                 ),
                 const Text(
                   'Status: ',
                 ),
-                Text(
-                  'Location: $_locPerm',
-                ),
                 FilledButton(
-                  onPressed: toggleTrack,
+                  onPressed: toggleTracking,
                   child: Text("$_trackingText"),
                 ),
                 Text(
                   'GPS Log Counter: $_logCounter\n$_posString',
+                ),
+                FilledButton(
+                  onPressed: _openBacktrackShareUrl,
+                  child: const Text("Open Track"),
+                ),
+                FilledButton(
+                  onPressed: _openBacktrackMapUrl,
+                  child: const Text("Open Map"),
                 ),
               ],
             ),
           )
         ]),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }

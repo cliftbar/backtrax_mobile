@@ -1,12 +1,16 @@
 import 'dart:convert';
 
+import 'package:battery_plus/battery_plus.dart' as batt;
 import 'package:geojson_vi/geojson_vi.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
-import 'package:battery_plus/battery_plus.dart' as batt;
+import 'package:sprintf/sprintf.dart';
 
 class BacktrackClient {
-  String baseUrl = 'https://backtrack.cliftbar.site';
+  final String baseUrl = 'https://backtrack.cliftbar.site';
+  final String _trackUrl = "%s/%s/track/%s/json";
+  final String _backtrackMapUrl = "%s/map.html?key=%s";
+  final String _backtrackShareUrl = "%s/map.html?&track=%s";
   batt.Battery battery = batt.Battery();
 
   Future<List<String>> getTrackNames({String key = 'user'}) async {
@@ -54,5 +58,16 @@ class BacktrackClient {
         headers: <String, String>{
           'Content-Type': 'application/json; charset=UTF-8',
         });
+  }
+
+  String makeTrackUrl(String key, String trackId) {
+    return sprintf(_trackUrl, [baseUrl, key, trackId]);
+  }
+
+  String makeBacktrackShareUrl(String key, String trackId) {
+    return sprintf(_backtrackShareUrl, [baseUrl, makeTrackUrl(key, trackId)]);
+  }
+  String makeBacktrackMapUrl(String key) {
+    return sprintf(_backtrackMapUrl, [baseUrl, key]);
   }
 }
